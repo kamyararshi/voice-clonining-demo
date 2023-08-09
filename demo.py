@@ -6,8 +6,10 @@ import librosa
 import pyaudio
 import numpy as np
 
+from argparse import ArgumentParser
 
-def convert_chunk(wav_input, sr, target_sr=22050, speaker='ahmadCorrect', api_url = "https://scevcplusplus.ngrok.app"):
+
+def convert_chunk(wav_inputarray, sr, target_sr=22050, speaker='ahmadCorrect', api_url = "https://scevcplusplus.ngrok.app"):
     """
     Inputs:
         wav_input:
@@ -15,10 +17,10 @@ def convert_chunk(wav_input, sr, target_sr=22050, speaker='ahmadCorrect', api_ur
     Outputs:
         response_wav: numpy array output cloned voice file
     """
-    if len(wav_input.shape) > 1: # wav file not mono
-        wav = wav_input[:, 0]
+    if len(wav_inputarray.shape) > 1: # wav file not mono
+        wav = wav_inputarray[:, 0]
     else:
-        wav = wav_input.copy()
+        wav = wav_inputarray.copy()
     
 
     # Resample to 22050
@@ -55,7 +57,7 @@ def test_microphone(device_index):
     p = pyaudio.PyAudio()
     
     stream = p.open(format=pyaudio.paInt16,
-                    channels=1,
+                    channels=1, # Set to 1 for mono microphone
                     rate=sample_rate,
                     input=True,
                     output=True,
@@ -97,12 +99,21 @@ def record_microphone(device_index, rate, duration):
         p.terminate()
 
 if __name__ == "__main__":
+    parser = ArgumentParser()
+    parser.add_argument('--speaker', default='ahmadCorrect', choices=["ahmadCorrect", "obama", "sundar", "modi", "emma", "priyanka", "ravish", "aubrey", "lex", "oprah", "miley"])
+    parser.add_argument('--target_sr', default="22050")
+    parser.add_argument('--length', default="4")
+    args = parser.parse_args()
+
     selected_device_index = select_microphone()
     test_microphone(selected_device_index)
     
-    target_rate = 44100  # Adjust this as needed
-    audio_generator = record_microphone(selected_device_index, target_rate)
+    target_rate = int(args.target_sr)  # Adjust this as needed
+    duration = int(args.length)
+    audio_generator = record_microphone(selected_device_index, target_rate, duration=duration)
     
-    for _ in range(int(target_rate * 4 / 44100)):  # Recording for 4 seconds
+    for _ in range(int(target_rate * duration / 44100)):  # Recording for 4 seconds
         audio_chunk = next(audio_generator)
+        print(audio_chunk.shape)
         # Process the audio chunk as needed
+        #output_chunk = convert_chunk(audio_chunk, sr=target_rate, speaker=args.speaker)
