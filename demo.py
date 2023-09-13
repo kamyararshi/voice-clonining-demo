@@ -5,9 +5,9 @@ import json
 import librosa
 import pyaudio
 import numpy as np
+import os
 
 from argparse import ArgumentParser
-
 
 def convert_chunk(wav_inputarray, sr, target_sr=22050, speaker='ahmadCorrect', api_url = "https://scevcplusplus.ngrok.app"):
     """
@@ -30,6 +30,9 @@ def convert_chunk(wav_inputarray, sr, target_sr=22050, speaker='ahmadCorrect', a
     wav_base64 = base64.b64encode(wav)
 
     response = requests.post(f"{api_url}/convert_voice", data={"audio": wav_base64, "speaker" : speaker} )
+    print('#######################')
+    print(response)
+    print('#######################')
     response_data = json.loads(response.text)
     response_wav = base64.b64decode(response_data['audio_converted'])
     response_chunk = np.frombuffer(response_wav, dtype=np.float32)
@@ -45,10 +48,12 @@ def select_microphone():
     print("Available microphones:")
     for i in range(num_devices):
         device_info = p.get_device_info_by_host_api_device_index(0, i)
-        if 'microphone' in device_info['name'].lower():
-            print(f"{i}: {device_info['name']}")
-
+        #if 'microphone' in device_info['name'].lower():
+        print(f"{i}: {device_info['name']}")
+    
     device_index = int(input("Enter the device index of the microphone you want to use: "))
+
+    print(p.get_device_info_by_index(device_index))
     return device_index
 
 def test_microphone(device_index):
@@ -63,7 +68,7 @@ def test_microphone(device_index):
                     output=True,
                     frames_per_buffer=chunk_size,
                     input_device_index=device_index,
-                    output_device_index=device_index)
+                    output_device_index=3)
     
     print("Testing microphone...")
     
@@ -90,13 +95,13 @@ def record_microphone(device_index, rate, duration):
     print("Recording started...")
     
     while True:
-        data = stream.read(chunk_size)
+        data = stream.read(chunk_size, exception_on_overflow = False)
         audio_chunk = np.frombuffer(data, dtype=np.int16)
         yield audio_chunk
-    else:
-        stream.stop_stream()
-        stream.close()
-        p.terminate()
+    
+    stream.stop_stream()
+    stream.close()
+    p.terminate()
 
 if __name__ == "__main__":
     parser = ArgumentParser()
@@ -112,8 +117,18 @@ if __name__ == "__main__":
     duration = int(args.length)
     audio_generator = record_microphone(selected_device_index, target_rate, duration=duration)
     
-    for _ in range(int(target_rate * duration / 44100)):  # Recording for 4 seconds
+    #for _ in range(int(target_rate * duration / 44100)):  # Recording for 4 seconds
+    
+    filelist = [ f for f in os.listdir('tmp/') if f.endswith(".wav") ]
+    for f in filelist:
+        os.remove(os.path.join('tmp/', f))
+    i=0
+    while True:
         audio_chunk = next(audio_generator)
-        print(audio_chunk.shape)
+        sf.write(f'tmp/chunk{i}.wav', audio_chunk, 22050)
+        wav, sr = sf.read(f'tmp/chunk{i}.wav', dtype='float32')
         # Process the audio chunk as needed
         #output_chunk = convert_chunk(audio_chunk, sr=target_rate, speaker=args.speaker)
+        output_chunk = convert_chunk(wav, sr=sr, speaker=args.speaker)
+        sf.write(f'tmp/output_chunk{i}.wav', output_chunk, 22050)
+        i += 1
